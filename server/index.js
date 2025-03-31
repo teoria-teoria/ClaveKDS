@@ -64,12 +64,17 @@ function transformSquareOrder(webhookData) {
   const squareOrder = webhookData.data.object.order;
   
   return {
-    orderId: squareOrder.id,
+    id: squareOrder.id,
+    customerName: squareOrder.customer_id || 'New Order',
     items: squareOrder.line_items.map(item => ({
       name: item.name,
-      quantity: item.quantity,
-      modifiers: item.modifiers?.map(mod => mod.name) || []
-    }))
+      quantity: parseInt(item.quantity),
+      variant: item.modifiers?.[0]?.name || 'Regular'
+    })),
+    timestamp: Date.now(),
+    completed: false,
+    completedAt: undefined,
+    finalElapsedTime: undefined
   };
 }
 
@@ -81,19 +86,22 @@ app.post('/webhook', (req, res) => {
     
     console.log('Received webhook:', JSON.stringify(req.body, null, 2));
 
-    // Only process order.updated events
-    if (req.body.type !== 'order.updated') {
+    // Process both created and updated events
+    if (!['order.created', 'order.updated'].includes(req.body.type)) {
       return res.status(200).json({ message: 'Ignored non-order event' });
     }
 
     const orderData = transformSquareOrder(req.body);
     
-    // Store order in memory
-    orders.set(orderData.orderId, orderData);
-    
-    // Emit to all connected clients
-    io.emit('new_order', orderData);
-    console.log('Emitted new order:', orderData);
+    // Only store/update if not completed
+    if (!orderData.completed) {
+      // Store order in memory
+      orders.set(orderData.id, orderData);
+      
+      // Emit to all connected clients
+      io.emit('new_order', orderData);
+      console.log('Emitted new order:', orderData);
+    }
 
     res.status(200).json({ received: true });
   } catch (error) {
@@ -129,6 +137,30 @@ app.get('/', (req, res) => {
     ordersCount: orders.size,
     webhookUrl: 'https://0dfd-2603-3005-36bf-c000-812f-7449-b06c-12e2.ngrok-free.app/webhook'
   });
+});
+
+// Test endpoint for simulating orders
+app.post('/test-order', (req, res) => {
+  const testOrder = {
+    id: Date.now().toString(),
+    customerName: 'Test Customer',
+    items: [
+      { name: 'Test Item', quantity: 1, variant: 'Regular' }
+    ],
+    timestamp: Date.now(),
+    completed: false,
+    completedAt: undefined,
+    finalElapsedTime: undefined
+  };
+  
+  // Store order in memory
+  orders.set(testOrder.id, testOrder);
+  
+  // Emit to all connected clients
+  io.emit('new_order', testOrder);
+  console.log('Emitted test order:', testOrder);
+
+  res.json({ success: true, order: testOrder });
 });
 
 // Start the server

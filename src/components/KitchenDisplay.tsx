@@ -1,7 +1,20 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { io } from 'socket.io-client';
 import { Order } from '../types/order';
 import OrderCard from './OrderCard';
 import ClaveLogo from '../assets/images/Clave Horizontal.png';
+
+// Initialize Socket.IO
+const socket = io('http://localhost:4000');
+
+// Add connection status logging
+socket.on('connect', () => {
+  console.log('Connected to backend server');
+});
+
+socket.on('connect_error', (error) => {
+  console.error('Socket connection error:', error);
+});
 
 const DUMMY_ORDERS: Order[] = [
   {
@@ -31,13 +44,47 @@ const DUMMY_ORDERS: Order[] = [
 ];
 
 export default function KitchenDisplay() {
-  const [orders, setOrders] = useState<Order[]>(DUMMY_ORDERS);
+  const [orders, setOrders] = useState<Order[]>([]);
   const [activeTab, setActiveTab] = useState<'todo' | 'completed'>('todo');
+
+  // Socket.IO event listeners
+  useEffect(() => {
+    // Listen for initial orders
+    socket.on('initial_orders', (initialOrders: Order[]) => {
+      console.log('Received initial orders:', initialOrders);
+      setOrders(initialOrders);
+    });
+
+    // Listen for new orders
+    socket.on('new_order', (newOrder: Order) => {
+      console.log('Received new order:', newOrder);
+      setOrders(prev => [...prev, { 
+        ...newOrder,
+        timestamp: Date.now(),
+        completed: false,
+        customerName: 'New Order'
+      }]);
+    });
+
+    // Listen for completed orders
+    socket.on('order_completed', (orderId: string) => {
+      console.log('Order completed:', orderId);
+      setOrders(prev => prev.filter(order => order.id !== orderId));
+    });
+
+    // Cleanup on unmount
+    return () => {
+      socket.off('initial_orders');
+      socket.off('new_order');
+      socket.off('order_completed');
+    };
+  }, []);
 
   const todoOrders = orders.filter(order => !order.completed);
   const completedOrders = orders.filter(order => order.completed);
 
   const handleOrderComplete = (orderId: string, elapsedTime: string) => {
+    socket.emit('complete_order', orderId);
     setOrders(orders.map(order => 
       order.id === orderId 
         ? { 
