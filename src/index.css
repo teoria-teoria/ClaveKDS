@@ -1,0 +1,24 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  @font-face {
+    font-family: 'Switzer';
+    src: url('https://fonts.cdnfonts.com/css/switzer') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+  }
+  
+  body {
+    @apply bg-gray-50;
+    font-family: 'Switzer', sans-serif;
+  }
+}
+
+@layer utilities {
+  .writing-mode-vertical {
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+  }
+} 
